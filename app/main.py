@@ -12,7 +12,7 @@ from .auth import (
 )
 from .dependencies import get_current_user, get_current_admin
 from .database import get_db, init_db, engine
-from .utils.email import send_verification_email
+from .utils.email import send_verification_email, send_otp_verification_email
 from .config import settings
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -105,9 +105,10 @@ async def login(otp_request: OTPRequest, db: AsyncSession = Depends(get_db)):
     store_otp(user.email, otp)
 
     # Send OTP via email
-    await send_verification_email(
-        user.email, f"Your OTP is: {otp} (valid for 5 minutes)"
-    )
+    await send_otp_verification_email(user.email, otp)
+    # await send_verification_email(
+    #     user.email, f"Your OTP is: {otp} (valid for 5 minutes)"
+    # )
 
     return {"message": "OTP sent to your email"}
 
@@ -137,7 +138,8 @@ async def password_reset_request(email: str, db: AsyncSession = Depends(get_db))
         raise HTTPException(status_code=404, detail="User not found")
 
     reset_token = create_access_token(data={"sub": email})
-    await send_verification_email(email, reset_token)
+    # await send_verification_email(email, reset_token)
+    await send_otp_verification_email(email, reset_token, True)
     return {"message": "Password reset link sent to email"}
 
 

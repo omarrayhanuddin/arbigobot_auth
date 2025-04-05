@@ -23,8 +23,9 @@ async def send_otp_verification_email(email: str, otp: str, is_pwd=False):
     message = "This is your email verification code:"
     if is_pwd:
         message = "This is your password reset link:"
+        otp = f"https://arbigobot.com/admin/reset-password/{otp}"
 
-    email_template_folder = Path(__file__).parent.parent.joinpath("email_template")
+    email_template_folder = Path(__file__).parent.parent.joinpath("templates")
     try:
         with open(f"{email_template_folder}/otp.html", "r", encoding="utf-8") as f:
             html_body = f.read()

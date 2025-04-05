@@ -20,7 +20,6 @@ class Token(BaseModel):
     token_type: str
 
 class PasswordReset(BaseModel):
-    email: EmailStr
     new_password: str
     token: str
 
