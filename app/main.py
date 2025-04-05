@@ -12,7 +12,7 @@ from .auth import (
 )
 from .dependencies import get_current_user, get_current_admin
 from .database import get_db, init_db, engine
-from .utils.email import send_verification_email, send_otp_verification_email
+from .utils.email import send_verification_email
 from .config import settings
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -33,7 +33,7 @@ app = FastAPI(
     title="User Management API",
     description="API with user auth, admin features, otp login, and email verification",
     version="1.0.0",
-    lifespan=lifespan,
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -57,41 +57,41 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already registered")
 
 
-# @app.post("/auth/admin/token", response_model=Token)
-# async def login(email: str, password: str, db: AsyncSession = Depends(get_db)):
-#     user = await get_user_by_email(db, email)
-#     if not user or not verify_password(password, user.password):
-#         raise HTTPException(status_code=401, detail="Incorrect email or password")
+@app.post("/auth/admin/token", response_model=Token)
+async def login(email: str, password: str, db: AsyncSession = Depends(get_db)):
+    user = await get_user_by_email(db, email)
+    if not user or not verify_password(password, user.password):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
 
-#     if not user.is_verified:
-#         raise HTTPException(status_code=403, detail="Email not verified")
+    if not user.is_verified:
+        raise HTTPException(status_code=403, detail="Email not verified")
 
-#     access_token = create_access_token(
-#         data={"sub": user.email},
-#         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-#     )
-#     return {"access_token": access_token, "token_type": "bearer"}
+    access_token = create_access_token(
+        data={"sub": user.email},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
-# @app.get("/auth/admin/verify-email")
-# async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
-#     try:
-#         payload = jwt.decode(
-#             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-#         )
-#         email: str = payload.get("sub")
+@app.get("/auth/admin/verify-email")
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        email: str = payload.get("sub")
 
-#         user = await get_user_by_email(db, email)
-#         if not user or user.is_verified:
-#             raise HTTPException(
-#                 status_code=400, detail="Email already verified or invalid"
-#             )
+        user = await get_user_by_email(db, email)
+        if not user or user.is_verified:
+            raise HTTPException(
+                status_code=400, detail="Email already verified or invalid"
+            )
 
-#         user.is_verified = True
-#         await db.commit()
-#         return {"message": "Email verified successfully"}
-#     except jwt.PyJWTError:
-#         raise HTTPException(status_code=400, detail="Invalid verification token")
+        user.is_verified = True
+        await db.commit()
+        return {"message": "Email verified successfully"}
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=400, detail="Invalid verification token")
 
 
 @app.post("/auth/admin/login")
@@ -105,8 +105,8 @@ async def login(otp_request: OTPRequest, db: AsyncSession = Depends(get_db)):
     store_otp(user.email, otp)
 
     # Send OTP via email
-    await send_otp_verification_email(
-        user.email, otp=otp
+    await send_verification_email(
+        user.email, f"Your OTP is: {otp} (valid for 5 minutes)"
     )
 
     return {"message": "OTP sent to your email"}
@@ -137,7 +137,7 @@ async def password_reset_request(email: str, db: AsyncSession = Depends(get_db))
         raise HTTPException(status_code=404, detail="User not found")
 
     reset_token = create_access_token(data={"sub": email})
-    await send_otp_verification_email(email, reset_token, True)
+    await send_verification_email(email, reset_token)
     return {"message": "Password reset link sent to email"}
 
 
