@@ -12,7 +12,7 @@ from .auth import (
 )
 from .dependencies import get_current_user, get_current_admin
 from .database import get_db, init_db, engine
-from .utils.email import send_verification_email
+from .utils.email import send_verification_email, send_otp_verification_email
 from .config import settings
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -45,7 +45,7 @@ app.add_middleware(
 )
 
 
-@app.post("/register", response_model=User)
+@app.post("/auth/admin/register", response_model=User)
 async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     try:
         db_user = await create_user(db, user)
@@ -57,65 +57,62 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already registered")
 
 
-@app.post("/token", response_model=Token)
-async def login(email: str, password: str, db: AsyncSession = Depends(get_db)):
-    user = await get_user_by_email(db, email)
-    if not user or not verify_password(password, user.password):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
+# @app.post("/auth/admin/token", response_model=Token)
+# async def login(email: str, password: str, db: AsyncSession = Depends(get_db)):
+#     user = await get_user_by_email(db, email)
+#     if not user or not verify_password(password, user.password):
+#         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
-    if not user.is_verified:
-        raise HTTPException(status_code=403, detail="Email not verified")
+#     if not user.is_verified:
+#         raise HTTPException(status_code=403, detail="Email not verified")
 
-    access_token = create_access_token(
-        data={"sub": user.email},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
-
-
-@app.get("/verify-email")
-async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
-    try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-        )
-        email: str = payload.get("sub")
-
-        user = await get_user_by_email(db, email)
-        if not user or user.is_verified:
-            raise HTTPException(
-                status_code=400, detail="Email already verified or invalid"
-            )
-
-        user.is_verified = True
-        await db.commit()
-        return {"message": "Email verified successfully"}
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=400, detail="Invalid verification token")
+#     access_token = create_access_token(
+#         data={"sub": user.email},
+#         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+#     )
+#     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.post("/login")
+# @app.get("/auth/admin/verify-email")
+# async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+#     try:
+#         payload = jwt.decode(
+#             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+#         )
+#         email: str = payload.get("sub")
+
+#         user = await get_user_by_email(db, email)
+#         if not user or user.is_verified:
+#             raise HTTPException(
+#                 status_code=400, detail="Email already verified or invalid"
+#             )
+
+#         user.is_verified = True
+#         await db.commit()
+#         return {"message": "Email verified successfully"}
+#     except jwt.PyJWTError:
+#         raise HTTPException(status_code=400, detail="Invalid verification token")
+
+
+@app.post("/auth/admin/login")
 async def login(otp_request: OTPRequest, db: AsyncSession = Depends(get_db)):
     user = await get_user_by_email(db, otp_request.email)
     if not user or not verify_password(otp_request.password, user.password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
-
-    if not user.is_verified:
-        raise HTTPException(status_code=403, detail="Email not verified")
 
     # Generate and store OTP
     otp = generate_otp()
     store_otp(user.email, otp)
 
     # Send OTP via email
-    await send_verification_email(
-        user.email, f"Your OTP is: {otp} (valid for 5 minutes)"
+    await send_otp_verification_email(
+        user.email, otp=otp
     )
 
     return {"message": "OTP sent to your email"}
 
 
-@app.post("/verify-otp", response_model=Token)
+@app.post("/auth/admin/verify-otp", response_model=Token)
 async def verify_otp_endpoint(
     otp_verify: OTPVerify, db: AsyncSession = Depends(get_db)
 ):
@@ -133,22 +130,22 @@ async def verify_otp_endpoint(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.post("/password-reset-request")
+@app.post("/auth/admin/password-reset-request")
 async def password_reset_request(email: str, db: AsyncSession = Depends(get_db)):
     user = await get_user_by_email(db, email)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     reset_token = create_access_token(data={"sub": email})
-    await send_verification_email(email, reset_token)
+    await send_otp_verification_email(email, reset_token, True)
     return {"message": "Password reset link sent to email"}
 
 
-@app.post("/password-reset")
+@app.post("/auth/admin/password-reset")
 async def password_reset(reset: PasswordReset, db: AsyncSession = Depends(get_db)):
     try:
         payload = jwt.decode(
-            reset.reset_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            reset.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
         email: str = payload.get("sub")
 
@@ -163,12 +160,12 @@ async def password_reset(reset: PasswordReset, db: AsyncSession = Depends(get_db
         raise HTTPException(status_code=400, detail="Invalid reset token")
 
 
-@app.get("/users/me", response_model=User)
+@app.get("/auth/users/me", response_model=User)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-# @app.get("/admin/users", response_model=list[User])
+# @app.get("/auth/admin/admin/users", response_model=list[User])
 # async def get_all_users(
 #     db: AsyncSession = Depends(get_db), admin=Depends(get_current_admin)
 # ):

@@ -22,7 +22,7 @@ class Token(BaseModel):
 class PasswordReset(BaseModel):
     email: EmailStr
     new_password: str
-    reset_token: str
+    token: str
 
 class OTPRequest(BaseModel):
     email: EmailStr
