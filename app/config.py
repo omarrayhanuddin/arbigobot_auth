@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SENDER_EMAIL: str = "example@gmail.com"
     SENDER_PASSWORD: str = "example"
+    SITE_URL = "http://localhost:8000"
     
     class Config:
         env_file = ".env"
